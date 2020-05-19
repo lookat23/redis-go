@@ -161,6 +161,11 @@ func cliReadBulkReply(conn net.Conn) (error) {
 		return err
 	}
 
+	if len == -1 {
+		fmt.Println("(nil)")
+		return nil
+	}
+
 	if len == 0 {
 		return errors.New("content length is 0")
 	}
