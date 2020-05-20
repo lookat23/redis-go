@@ -4,6 +4,7 @@ import (
 	"net"
 	"errors"
 	"strings"
+	"strconv"
 )
 
 // 一个hash table来存放数据
@@ -38,6 +39,7 @@ func getRequestCommand(conn net.Conn) (string, error) {
 			cmd += string(buf[0])
 		}
 	}
+	cmd = strings.Trim(cmd, "\r\n")
 	return cmd, nil
 }
 
@@ -48,9 +50,14 @@ func handleCommandSet(arrCmd []string) error {
 	return nil
 }
 
-func handleCommandGet(arrCmd []string) error {
-	// fmt.Printf("get %s is %s", arrCmd[1], dict[arrCmd[1]])
-	fmt.Println(dict)
+func handleCommandGet(conn net.Conn, arrCmd []string) error {
+	fmt.Printf("get %s is %s", arrCmd[1], dict[arrCmd[1]])
+	value := dict[arrCmd[1]]
+	// fmt.Println(dict)
+	// 返回给客户端
+	// ${内容长度}\r\n{内容}\r\n
+	cmd := "$" + strconv.Itoa(len(value)) + "\r\n" + value + "\r\n"
+	conn.Write([]byte(cmd))
 
 	return nil
 }
@@ -74,7 +81,7 @@ func handleRequest(conn net.Conn) {
 	// 先只测试set 和 get
 	switch(arrCmd[0]) {
 	case "get":
-		handleCommandGet(arrCmd)
+		handleCommandGet(conn, arrCmd)
 	case "set":
 		handleCommandSet(arrCmd)
 	}
