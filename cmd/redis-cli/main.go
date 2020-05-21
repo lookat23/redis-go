@@ -255,6 +255,8 @@ func generateSendCommand() (string, error) {
 		return "", errors.New("命令不能为空")
 	}
 
+	arrCmd[0] = strings.ToLower(arrCmd[0])
+
 	cmdName := arrCmd[0]
 	cmdAttribute, ok := CMDTABLE[cmdName];
 	if !ok {
@@ -308,7 +310,7 @@ func cliReadLine(conn net.Conn) (string,error) {
 }
 
 func cliReadBulkReply(conn net.Conn) (error) {
-	// {内容长度}\r\n{内容}\n
+	// {内容长度}\r\n{内容}\r\n
 	str_len, err := cliReadLine(conn)
 	if err != nil {
 		return err
@@ -344,6 +346,45 @@ func cliReadBulkReply(conn net.Conn) (error) {
 	return nil
 }
 
+func cliReadSingleLineReply(conn net.Conn) error {
+	// {内容}\r\n
+	data, err := cliReadLine(conn)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(data)
+
+	return nil
+}
+
+func cliReadMultiBulkReply(conn net.Conn) error {
+	byteCount, err := cliReadLine(conn)
+	count, err := strconv.Atoi(byteCount)
+	if err != nil {
+		return err
+	}
+
+	if count == -1 {
+		fmt.Println("(nil)");
+		return nil
+	}
+
+	if count == 0 {
+		fmt.Println("empty list or set")
+	}
+
+	for i := 0; i < count; i++ {
+		fmt.Printf("%d. ", i+1)
+		if err := cliReadReply(conn); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// 协议说明 https://redis.io/topics/protocol
 func cliReadReply(conn net.Conn) (error) {
 	buf := make([]byte, 1)
 	_, err := conn.Read(buf)
@@ -351,27 +392,24 @@ func cliReadReply(conn net.Conn) (error) {
 		return err
 	}
 	read_type := buf[0]
-	fmt.Println(string(read_type))
+	// fmt.Printf("%s  ", string(read_type))
 	switch read_type {
-	case '-':
+	case '-':	// Errors
 		fmt.Printf("(error) ")
-		fmt.Printf("\n will call cliReadSingleLineReply\n")
-	case '+':
-		fmt.Printf("\n will call cliReadSingleLineReply\n")
-	case ':':
-		fmt.Printf("\n will call cliReadSingleLineReply\n")
-	case '$':
-		//fmt.Printf("\n will call cliReadBulkReply\n")
+		err = cliReadSingleLineReply(conn)
+	case '+':	// Simple strings 不包含\r\n的字符串
+		err = cliReadSingleLineReply(conn)
+	case ':':	// integers
+		fmt.Printf("(integer) ")
+		err = cliReadSingleLineReply(conn)
+	case '$':	// Bulk strings
 		err = cliReadBulkReply(conn)
-		if err != nil {
-			panic(err)
-		}
-	case '*':
-		fmt.Printf("\n will call cliReadMultiBulkReply\n")
+	case '*':	// Arrays
+		err = cliReadMultiBulkReply(conn)
 	default:
 		fmt.Printf("\n protocal error, got %c as reply type byte\n", read_type)
 	}
-	return nil
+	return err
 }
 
 func cliSendCommand() (error) {
